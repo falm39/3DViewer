@@ -1,12 +1,76 @@
 let scene, camera, renderer, controls, objects = [];
+let selectedObject = null; // Bu değişkeni global olarak tanımlayın
 
 document.addEventListener('DOMContentLoaded', () => {
     init();
     const fileInput = document.getElementById('model-upload');
     fileInput.addEventListener('change', handleModelUpload);
+    const colorPicker = document.getElementById('color-picker');
+    colorPicker.addEventListener('input', handleColorChange); // Renk değiştirme olayını dinlemek için
 });
 
 
+document.getElementById('color-picker').addEventListener('input', (event) => {
+    if (selectedObject) {
+        if (selectedObject.material) {
+            let material = selectedObject.material;
+            let color = event.target.value;
+            
+            // Materyal türü ve özelliklerini logla
+            console.log("Seçilen nesnenin materyali:", material);
+            console.log("Materyal Türü:", material.type);
+            console.log("Materyal Adı:", material.name);
+            
+            // Materyal türü kontrolü yapın
+            if (material instanceof THREE.MeshStandardMaterial ||
+                material instanceof THREE.MeshPhongMaterial ||
+                material instanceof THREE.MeshBasicMaterial) {
+                    
+                material.color.set(color);
+                material.needsUpdate = true; // Materyali güncellemek için ekleyin
+                console.log("Materyal rengi başarıyla değiştirildi:", material.color);
+            } else {
+                console.error("Seçilen nesnenin materyali desteklenmiyor. Materyal türü:", material.type);
+            }
+        } else {
+            console.error("Seçilen nesnenin materyali bulunmuyor.");
+        }
+    } else {
+        console.error("Seçili bir nesne yok.");
+    }
+});
+
+function handleColorChange(event) {
+    if (selectedObject) {
+        console.log("Seçilen Nesne:", selectedObject);
+
+        if (selectedObject.material) {
+            let material = selectedObject.material;
+            let color = event.target.value;
+
+            // Materyal türü ve özelliklerini logla
+            console.log("Materyal Bulundu:", material);
+            console.log("Materyal Türü:", material.type);
+            console.log("Materyal Adı:", material.name);
+
+            // Materyal türü kontrolü yapın
+            if (material instanceof THREE.MeshStandardMaterial ||
+                material instanceof THREE.MeshPhongMaterial ||
+                material instanceof THREE.MeshBasicMaterial) {
+                    
+                material.color.set(color);
+                material.needsUpdate = true; // Materyali güncellemek için ekleyin
+                console.log("Materyal rengi başarıyla değiştirildi:", material.color);
+            } else {
+                console.error("Seçilen nesnenin materyali desteklenmiyor. Materyal türü:", material.type);
+            }
+        } else {
+            console.error("Seçilen nesnenin materyali bulunmuyor.");
+        }
+    } else {
+        console.error("Seçili bir nesne yok.");
+    }
+}
 
 
 function init() {
@@ -36,16 +100,49 @@ function init() {
     const ambientLight = new THREE.AmbientLight(0x808080); // Ambient ışığı ekleyin
     scene.add(ambientLight);
 
+    // Raycaster and mouse for selecting objects
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
 
+    // Mouse click event for selecting objects
+    renderer.domElement.addEventListener('click', (event) => {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersects = raycaster.intersectObjects(objects, true);
+
+        if (intersects.length > 0) {
+            selectedMesh = intersects[0].object;
+            console.log("Seçilen mesh:", selectedMesh);
+        }
+    });
 
     // Render the scene
     render();
 
+    renderer.domElement.addEventListener('click', (event) => {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+    
+        const intersects = raycaster.intersectObjects(objects, true);
+    
+        if (intersects.length > 0) {
+            selectedObject = intersects[0].object;
+            console.log("Seçilen mesh:", selectedObject);
+        } else {
+            console.log("Herhangi bir nesne seçilmedi.");
+        }
+    });
     // Add event listeners
     window.addEventListener('resize', onWindowResize, false);
+
     
     
 }
+
+
 
 function render() {
     requestAnimationFrame(render);
@@ -59,6 +156,33 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function onDocumentMouseClick(event) {
+    event.preventDefault();
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    let intersects = raycaster.intersectObjects(objects, true);
+
+    if (intersects.length > 0) {
+        const intersectedObject = intersects[0].object;
+
+        // Yalnızca Mesh ve materyali olan nesneleri seç
+        if (intersectedObject.isMesh && intersectedObject.material) {
+            selectedObject = intersectedObject;
+            console.log("Seçilen mesh:", selectedObject);
+        } else {
+            console.error("Seçilen nesne bir mesh değil veya materyali yok.");
+            selectedObject = null; // Seçim iptal edilir
+        }
+    } else {
+        console.error("Herhangi bir nesne seçilmedi.");
+        selectedObject = null; // Seçim iptal edilir
+    }
 }
 
 function handleModelUpload(event) {
@@ -133,24 +257,27 @@ function handleModelUpload(event) {
                         } else {
                             console.error("Albedo texture yüklenmedi.");
                         }
-            
+                
                         if (child.material.normalMap) {
                             console.log("Normal map yüklendi:", child.material.normalMap.name);
                         } else {
                             console.log("Normal map bulunamadı.");
                         }
-            
+                
                         if (child.material.metalnessMap) {
                             console.log("Metalness map yüklendi:", child.material.metalnessMap.name);
                         } else {
                             console.log("Metalness map bulunamadı.");
                         }
-            
+                
                         if (child.material.roughnessMap) {
                             console.log("Roughness map yüklendi:", child.material.roughnessMap.name);
                         } else {
                             console.log("Roughness map bulunamadı.");
                         }
+                    } else if (child.isMesh) {
+                        // Materyal içermeyen bir mesh bulduğumuzda log ile bildiriyoruz
+                        console.error("Bu mesh için materyal bulunamadı:", child.name);
                     }
                 });
             
@@ -192,3 +319,7 @@ function handleModelUpload(event) {
 
     reader.readAsArrayBuffer(file);
 }
+
+
+
+
