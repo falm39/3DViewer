@@ -327,6 +327,75 @@ function handleModelUpload(event) {
 
     reader.readAsArrayBuffer(file);
 }
+function applyColorToTexture(selectedObject, color) {
+    const texture = selectedObject.material.map;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+
+    const image = new Image();
+    image.src = texture.image.src;
+
+    image.onload = () => {
+        canvas.width = image.width;
+        canvas.height = image.height;
+        context.drawImage(image, 0, 0);
+
+        // Burada tıklanan yüzeyin UV koordinatlarını bulmanız gerekir ve sadece o bölgeyi güncelleyin
+        // Örneğin, tüm texture'ı yeni renk ile boyamak için aşağıdaki kodu kullanabilirsiniz.
+        context.fillStyle = color.getStyle();
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Yeni texture oluştur
+        const newTexture = new THREE.CanvasTexture(canvas);
+        selectedObject.material.map = newTexture;
+        selectedObject.material.needsUpdate = true;
+    };
+}
+
+// İndir butonuna event listener ekleyin
+document.getElementById('download-button').addEventListener('click', function() {
+    saveModelAsZip(scene);
+});
+
+// GLTF Exporter ile model ve texture'ları kaydetme işlemi
+function saveModelAsZip(scene) {
+    const zip = new JSZip();
+    const texturesFolder = zip.folder("textures");
+
+    // GLTFExporter kullanarak sahneyi export et
+    const gltfExporter = new THREE.GLTFExporter();
+    gltfExporter.parse(scene, function(result) {
+        if (result instanceof ArrayBuffer) {
+            zip.file("scene.glb", new Blob([result], {type: "application/octet-stream"}));
+        } else {
+            const output = JSON.stringify(result, null, 2);
+            zip.file("scene.gltf", output);
+        }
+
+        // Tüm texture'ları kaydedin
+        scene.traverse(function(child) {
+            if (child.isMesh && child.material.map) {
+                const texture = child.material.map;
+                const textureImage = texture.image;
+
+                // Canvas'a çizin ve png formatında kaydedin
+                const canvas = document.createElement('canvas');
+                canvas.width = textureImage.width;
+                canvas.height = textureImage.height;
+                const context = canvas.getContext('2d');
+                context.drawImage(textureImage, 0, 0);
+                const dataUrl = canvas.toDataURL("image/png");
+                const data = dataUrl.split(',')[1];
+                texturesFolder.file(texture.name + ".png", data, {base64: true});
+            }
+        });
+
+        // ZIP dosyasını oluştur ve indirmeye hazırla
+        zip.generateAsync({type:"blob"}).then(function(content) {
+            saveAs(content, "model.zip");  // saveAs fonksiyonu burada kullanılıyor
+        });
+    }, {binary: true});
+}
 
 
 
