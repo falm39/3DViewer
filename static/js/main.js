@@ -85,15 +85,12 @@ function init() {
 
     // Seçim ve renk değiştirme işlemini doğrudan buraya entegre ediyoruz
     renderer.domElement.addEventListener('click', (event) => {
+        const rect = renderer.domElement.getBoundingClientRect(); // Ekran boyutunu al
         const mouse = new THREE.Vector2();
         const raycaster = new THREE.Raycaster();
     
-        // Hassasiyet ayarlarını yap
-        raycaster.params.Points.threshold = 0.01;
-        raycaster.params.Line.threshold = 0.01;
-    
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
     
         const intersects = raycaster.intersectObjects(objects, true);
@@ -103,21 +100,13 @@ function init() {
             selectedObject = intersect.object;
     
             if (selectedObject.isMesh) {
-                // Yüzey alanı kontrolü (çok küçük yüzeyleri dışlayabiliriz)
-                const face = intersect.face;
-                const area = calculateFaceArea(intersect.object.geometry, face);
-                if (area < 0.001) { // Küçük yüzeyleri dışarıda bırakmak için
-                    console.log("Yüzey alanı çok küçük, işlem yapılmadı.");
-                    return;
-                }
-    
                 // Yeni bir materyal kopyası oluştur
                 selectedObject.material = selectedObject.material.clone();
     
-                const color = new THREE.Color(document.getElementById('color-picker').value);  // Burada renk picker'dan gelen rengi kullanabilirsiniz
+                const face = intersect.face;
+                const color = new THREE.Color(document.getElementById('color-picker').value);
                 const geometry = selectedObject.geometry;
     
-                // Vertex renklerini ayarla
                 // Vertex renklerini ayarla
                 if (!geometry.attributes.color) {
                     const colors = [];
@@ -126,13 +115,13 @@ function init() {
                     }
                     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
                 }
-
+    
                 const vertexColors = geometry.attributes.color;
                 vertexColors.setXYZ(face.a, color.r, color.g, color.b);
                 vertexColors.setXYZ(face.b, color.r, color.g, color.b);
                 vertexColors.setXYZ(face.c, color.r, color.g, color.b);
                 vertexColors.needsUpdate = true;
-
+    
                 selectedObject.material.vertexColors = true;
                 selectedObject.material.needsUpdate = true;
     
@@ -149,6 +138,7 @@ function init() {
             console.log("Herhangi bir nesne seçilmedi.");
         }
     });
+    
     
     // Yüzey alanını hesaplayan fonksiyon
     function calculateFaceArea(geometry, face) {
@@ -309,7 +299,7 @@ function handleModelUpload(event) {
             
                 // Kamerayı modelin üzerine yerleştir
                 camera.position.set(0, size.y / 2, size.z * 2);
-                camera.lookAt(center); // Kamerayı modelin merkezine odakla
+                
             
                 // Işıklandırma ayarları (isteğe bağlı, zaten varsa eklemeyin)
                 const light = new THREE.DirectionalLight(0xffffff, 2);
