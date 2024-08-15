@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-document.getElementById('color-picker').addEventListener('input', (event) => {
+/*document.getElementById('color-picker').addEventListener('input', (event) => {
     if (selectedObject) {
         if (selectedObject.material) {
             let material = selectedObject.material;
@@ -38,39 +38,17 @@ document.getElementById('color-picker').addEventListener('input', (event) => {
     } else {
         console.error("Seçili bir nesne yok.");
     }
-});
+}); */
 
 function handleColorChange(event) {
-    if (selectedObject) {
-        console.log("Seçilen Nesne:", selectedObject);
-
-        if (selectedObject.material) {
-            let material = selectedObject.material;
-            let color = event.target.value;
-
-            // Materyal türü ve özelliklerini logla
-            console.log("Materyal Bulundu:", material);
-            console.log("Materyal Türü:", material.type);
-            console.log("Materyal Adı:", material.name);
-
-            // Materyal türü kontrolü yapın
-            if (material instanceof THREE.MeshStandardMaterial ||
-                material instanceof THREE.MeshPhongMaterial ||
-                material instanceof THREE.MeshBasicMaterial) {
-                    
-                material.color.set(color);
-                material.needsUpdate = true; // Materyali güncellemek için ekleyin
-                console.log("Materyal rengi başarıyla değiştirildi:", material.color);
-            } else {
-                console.error("Seçilen nesnenin materyali desteklenmiyor. Materyal türü:", material.type);
-            }
-        } else {
-            console.error("Seçilen nesnenin materyali bulunmuyor.");
-        }
-    } else {
-        console.error("Seçili bir nesne yok.");
-    }
+    // Bu fonksiyonu artık kullanmayacağız
 }
+
+
+
+
+
+
 
 
 function init() {
@@ -81,6 +59,7 @@ function init() {
     // Create camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 2, 5);
+
 
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -100,28 +79,19 @@ function init() {
     const ambientLight = new THREE.AmbientLight(0x808080); // Ambient ışığı ekleyin
     scene.add(ambientLight);
 
-    // Raycaster and mouse for selecting objects
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    // Mouse click event for selecting objects
-    renderer.domElement.addEventListener('click', (event) => {
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-
-        const intersects = raycaster.intersectObjects(objects, true);
-
-        if (intersects.length > 0) {
-            selectedMesh = intersects[0].object;
-            console.log("Seçilen mesh:", selectedMesh);
-        }
-    });
-
+    
     // Render the scene
     render();
 
+    // Seçim ve renk değiştirme işlemini doğrudan buraya entegre ediyoruz
     renderer.domElement.addEventListener('click', (event) => {
+        const mouse = new THREE.Vector2();
+        const raycaster = new THREE.Raycaster();
+    
+        // Hassasiyet ayarlarını yap
+        raycaster.params.Points.threshold = 0.01;
+        raycaster.params.Line.threshold = 0.01;
+    
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
@@ -129,12 +99,75 @@ function init() {
         const intersects = raycaster.intersectObjects(objects, true);
     
         if (intersects.length > 0) {
-            selectedObject = intersects[0].object;
-            console.log("Seçilen mesh:", selectedObject);
+            const intersect = intersects[0];
+            selectedObject = intersect.object;
+    
+            if (selectedObject.isMesh) {
+                // Yüzey alanı kontrolü (çok küçük yüzeyleri dışlayabiliriz)
+                const face = intersect.face;
+                const area = calculateFaceArea(intersect.object.geometry, face);
+                if (area < 0.001) { // Küçük yüzeyleri dışarıda bırakmak için
+                    console.log("Yüzey alanı çok küçük, işlem yapılmadı.");
+                    return;
+                }
+    
+                // Yeni bir materyal kopyası oluştur
+                selectedObject.material = selectedObject.material.clone();
+    
+                const color = new THREE.Color(document.getElementById('color-picker').value);  // Burada renk picker'dan gelen rengi kullanabilirsiniz
+                const geometry = selectedObject.geometry;
+    
+                // Vertex renklerini ayarla
+                // Vertex renklerini ayarla
+                if (!geometry.attributes.color) {
+                    const colors = [];
+                    for (let i = 0; i < geometry.attributes.position.count; i++) {
+                        colors.push(1, 1, 1); // Beyaz varsayılan renk
+                    }
+                    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                }
+
+                const vertexColors = geometry.attributes.color;
+                vertexColors.setXYZ(face.a, color.r, color.g, color.b);
+                vertexColors.setXYZ(face.b, color.r, color.g, color.b);
+                vertexColors.setXYZ(face.c, color.r, color.g, color.b);
+                vertexColors.needsUpdate = true;
+
+                selectedObject.material.vertexColors = true;
+                selectedObject.material.needsUpdate = true;
+    
+                console.log("Yüzey rengi başarıyla değiştirildi.");
+                console.log("Değiştirilen Mesh:", selectedObject.name || selectedObject.uuid);
+                console.log("Değiştirilen Yüzey Vertexleri:", {
+                    vertexA: face.a,
+                    vertexB: face.b,
+                    vertexC: face.c
+                });
+                console.log("Yeni Renk:", color);
+            }
         } else {
             console.log("Herhangi bir nesne seçilmedi.");
         }
     });
+    
+    // Yüzey alanını hesaplayan fonksiyon
+    function calculateFaceArea(geometry, face) {
+        const vA = new THREE.Vector3().fromBufferAttribute(geometry.attributes.position, face.a);
+        const vB = new THREE.Vector3().fromBufferAttribute(geometry.attributes.position, face.b);
+        const vC = new THREE.Vector3().fromBufferAttribute(geometry.attributes.position, face.c);
+    
+        const edge1 = new THREE.Vector3().subVectors(vB, vA);
+        const edge2 = new THREE.Vector3().subVectors(vC, vA);
+        const crossProduct = new THREE.Vector3().crossVectors(edge1, edge2);
+    
+        return crossProduct.length() / 2; // Üçgenin alanı
+    }
+    
+    
+    
+
+
+
     // Add event listeners
     window.addEventListener('resize', onWindowResize, false);
 
@@ -157,6 +190,7 @@ function onWindowResize() {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
+
 
 function onDocumentMouseClick(event) {
     event.preventDefault();
@@ -251,33 +285,17 @@ function handleModelUpload(event) {
             
                 // Texture'ları kontrol ediyoruz
                 gltf.scene.traverse(function (child) {
-                    if (child.isMesh && child.material) {
-                        if (child.material.map) {
-                            console.log("Albedo texture yüklendi:", child.material.map.name);
-                        } else {
-                            console.error("Albedo texture yüklenmedi.");
+                    if (child.isMesh) {
+                        child.material.vertexColors = true;
+                        const geometry = child.geometry;
+
+                        const colors = [];
+                        const color = new THREE.Color();
+                        for (let i = 0; i < geometry.attributes.position.count; i++) {
+                            color.setRGB(1, 1, 1); // Başlangıç rengi (beyaz)
+                            colors.push(color.r, color.g, color.b);
                         }
-                
-                        if (child.material.normalMap) {
-                            console.log("Normal map yüklendi:", child.material.normalMap.name);
-                        } else {
-                            console.log("Normal map bulunamadı.");
-                        }
-                
-                        if (child.material.metalnessMap) {
-                            console.log("Metalness map yüklendi:", child.material.metalnessMap.name);
-                        } else {
-                            console.log("Metalness map bulunamadı.");
-                        }
-                
-                        if (child.material.roughnessMap) {
-                            console.log("Roughness map yüklendi:", child.material.roughnessMap.name);
-                        } else {
-                            console.log("Roughness map bulunamadı.");
-                        }
-                    } else if (child.isMesh) {
-                        // Materyal içermeyen bir mesh bulduğumuzda log ile bildiriyoruz
-                        console.error("Bu mesh için materyal bulunamadı:", child.name);
+                        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
                     }
                 });
             
